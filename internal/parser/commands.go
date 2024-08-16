@@ -74,6 +74,8 @@ func (cmd *Command) handle() bool {
 		return cmd.getType()
 	case "EXISTS":
 		return cmd.exists()
+	case "RENAME":
+		return cmd.rename()
 	case "QUIT":
 		return cmd.quit()
 	default:
@@ -248,5 +250,35 @@ func (cmd *Command) exists() bool {
 	} else {
 		cmd.conn.Write([]uint8(":0\r\n"))
 	}
+	return true
+}
+
+func (cmd *Command) rename() bool {
+	if len(cmd.args) != 3 {
+		cmd.conn.Write([]uint8("-ERR wrong number of arguments for '" + cmd.args[0] + "' command\r\n"))
+		return true
+	}
+
+	oldKey := cmd.args[1]
+	newKey := cmd.args[2]
+
+	// Check if the old key exists
+	value, ok := cache.Load(oldKey)
+	if !ok {
+		cmd.conn.Write([]uint8("-ERR no such key\r\n"))
+		return true
+	}
+
+	// Store the value under the new key and delete the old key
+	cache.Store(newKey, value)
+	cache.Delete(oldKey)
+
+	// Check if the old key had an expiration and move it to the new key
+	if expiration, exists := expirations.Load(oldKey); exists {
+		expirations.Store(newKey, expiration)
+		expirations.Delete(oldKey)
+	}
+
+	cmd.conn.Write([]uint8("+OK\r\n"))
 	return true
 }
