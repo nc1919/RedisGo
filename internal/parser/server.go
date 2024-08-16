@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"log"
 	"net"
 )
@@ -18,6 +19,9 @@ func NewServer(address string) *Server {
 
 // ListenAndServe starts the TCP server and listens for incoming connections.
 func (s *Server) ListenAndServe() error {
+	if s == nil {
+		return fmt.Errorf("Server is nil")
+	}
 	listener, err := net.Listen("tcp", s.Address)
 	if err != nil {
 		return err
@@ -54,14 +58,41 @@ func (s *Server) startSession(conn net.Conn) {
 
 	p := NewParser(conn)
 	for {
+		log.Println("Waiting to read data from", conn.RemoteAddr())
 		cmd, err := p.Command()
 		if err != nil {
 			log.Println("Error:", err)
 			conn.Write([]byte("-ERR " + err.Error() + "\r\n"))
 			break
 		}
+		log.Println("Command received:", cmd)
 		if !cmd.handle() {
 			break
 		}
 	}
 }
+
+// func handleConnection(conn net.Conn) {
+// 	defer func() {
+// 		log.Println("Closing connection from", conn.RemoteAddr())
+// 		conn.Close()
+// 	}()
+
+// 	buf := make([]byte, 1024)
+// 	for {
+// 		log.Println("Waiting to read data...")
+// 		n, err := conn.Read(buf)
+// 		if err != nil {
+// 			log.Println("Error reading data:", err)
+// 			return
+// 		}
+
+// 		log.Printf("Received %d bytes: %s\n", n, string(buf[:n]))
+// 		response := "Echo: " + string(buf[:n]) + "\n"
+// 		_, err = conn.Write([]byte(response))
+// 		if err != nil {
+// 			log.Println("Error writing data:", err)
+// 			return
+// 		}
+// 	}
+// }

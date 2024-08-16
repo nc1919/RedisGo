@@ -40,14 +40,20 @@ func (p *Parser) atEnd() bool {
 }
 
 func (p *Parser) readLine() ([]byte, error) {
-	line, err := p.r.ReadBytes('\r')
-	if err != nil {
-		return nil, err
+	for {
+		b, err := p.r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+
+		p.line = append(p.line, b)
+
+		if b == '\n' {
+			line := p.line[:len(p.line)-1]
+			p.line = p.line[:0]
+			return line, nil
+		}
 	}
-	if _, err := p.r.ReadByte(); err != nil {
-		return nil, err
-	}
-	return line[:len(line)-1], nil
 }
 
 func (p *Parser) consumeString() (s []byte, err error) {
@@ -90,20 +96,35 @@ func (p *Parser) consumeArg() (s string, err error) {
 func (p *Parser) Command() (Command, error) {
 	tp, err := p.r.ReadByte()
 	if err != nil {
+		log.Println("Error reading byte:", err)
 		return Command{}, err
 	}
+
 	if tp == '*' {
-		log.Println("resp array")
-		return p.respArray()
-	} else {
-		line, err := p.readLine()
+		log.Println("Detected RESP array")
+		cmd, err := p.respArray()
 		if err != nil {
 			return Command{}, err
 		}
+		p.line = p.line[:0]
+		return cmd, nil
+
+	} else {
+		line, err := p.readLine()
+		if err != nil {
+			log.Println("Error reading line:", err)
+			return Command{}, err
+		}
+
 		p.pos = 0
-		p.line = append([]byte{}, tp)
-		p.line = append(p.line, line...)
-		return p.inline()
+		p.line = append([]byte{tp}, line...)
+		log.Println("Detected inline command:", string(p.line))
+		cmd, err := p.inline()
+		if err != nil {
+			return Command{}, err
+		}
+		p.line = p.line[:0]
+		return cmd, nil
 	}
 }
 
