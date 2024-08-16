@@ -68,6 +68,8 @@ func (cmd *Command) handle() bool {
 		return cmd.set()
 	case "DEL":
 		return cmd.del()
+	case "GETSET":
+		return cmd.getset()
 	case "QUIT":
 		return cmd.quit()
 	default:
@@ -178,4 +180,34 @@ func (cmd Command) setExpiration(pos int) error {
 		cache.Delete(cmd.args[1])
 	}()
 	return nil
+}
+
+func (cmd *Command) getset() bool {
+	if len(cmd.args) != 3 {
+		cmd.conn.Write([]uint8("-ERR wrong number of arguments for '" + cmd.args[0] + "' command\r\n"))
+		return true
+	}
+
+	key := cmd.args[1]
+	newValue := cmd.args[2]
+
+	// Fetch the existing value
+	oldValue, _ := cache.Load(key)
+	var oldValueStr string
+
+	if oldValue != nil {
+		oldValueStr = oldValue.(string)
+		if strings.HasPrefix(oldValueStr, "\"") {
+			oldValueStr, _ = strconv.Unquote(oldValueStr)
+		}
+		cmd.conn.Write([]uint8(fmt.Sprintf("$%d\r\n", len(oldValueStr))))
+		cmd.conn.Write(append([]uint8(oldValueStr), []uint8("\r\n")...))
+	} else {
+		// If key does not exist, return nil
+		cmd.conn.Write([]uint8("$-1\r\n"))
+	}
+
+	// Set the key to the new value
+	cache.Store(key, newValue)
+	return true
 }
