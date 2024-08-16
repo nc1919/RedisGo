@@ -70,6 +70,10 @@ func (cmd *Command) handle() bool {
 		return cmd.del()
 	case "GETSET":
 		return cmd.getset()
+	case "TYPE":
+		return cmd.getType()
+	case "EXISTS":
+		return cmd.exists()
 	case "QUIT":
 		return cmd.quit()
 	default:
@@ -209,5 +213,40 @@ func (cmd *Command) getset() bool {
 
 	// Set the key to the new value
 	cache.Store(key, newValue)
+	return true
+}
+
+func (cmd *Command) getType() bool {
+	if len(cmd.args) != 2 {
+		cmd.conn.Write([]uint8("-ERR wrong number of arguments for '" + cmd.args[0] + "' command\r\n"))
+		return true
+	}
+
+	key := cmd.args[1]
+	if val, ok := cache.Load(key); ok {
+		// Assuming the cache only stores strings, return "string"
+		if _, isString := val.(string); isString {
+			cmd.conn.Write([]uint8("+string\r\n"))
+		} else {
+			cmd.conn.Write([]uint8("+none\r\n"))
+		}
+	} else {
+		cmd.conn.Write([]uint8("+none\r\n"))
+	}
+	return true
+}
+
+func (cmd *Command) exists() bool {
+	if len(cmd.args) != 2 {
+		cmd.conn.Write([]uint8("-ERR wrong number of arguments for '" + cmd.args[0] + "' command\r\n"))
+		return true
+	}
+
+	key := cmd.args[1]
+	if _, ok := cache.Load(key); ok {
+		cmd.conn.Write([]uint8(":1\r\n"))
+	} else {
+		cmd.conn.Write([]uint8(":0\r\n"))
+	}
 	return true
 }
