@@ -76,6 +76,10 @@ func (cmd *Command) handle() bool {
 		return cmd.exists()
 	case "RENAME":
 		return cmd.rename()
+	case "TTL":
+		return cmd.ttl()
+	case "PERSIST":
+		return cmd.persist()
 	case "QUIT":
 		return cmd.quit()
 	default:
@@ -280,5 +284,55 @@ func (cmd *Command) rename() bool {
 	}
 
 	cmd.conn.Write([]uint8("+OK\r\n"))
+	return true
+}
+
+func (cmd *Command) ttl() bool {
+	if len(cmd.args) != 2 {
+		cmd.conn.Write([]uint8("-ERR wrong number of argumenrs for '" + cmd.args[0] + "'command\r\n"))
+		return true
+	}
+
+	key := cmd.args[1]
+	expiration, exists := expirations.Load(key)
+	if !exists {
+		if _, ok := cache.Load(key); ok {
+			cmd.conn.Write([]uint8(": -1\r\n"))
+		} else {
+			cmd.conn.Write([]uint8(": -2\r\n"))
+		}
+		return true
+	}
+
+	expirationTime := expiration.(int64)
+	now := time.Now().Unix()
+	ttl := expirationTime - now
+
+	if ttl > 0 {
+		cmd.conn.Write([]uint8(fmt.Sprintf(":%d\r\n", ttl)))
+	} else {
+		cmd.conn.Write([]uint8(":0\r\n"))
+	}
+	return true
+}
+
+func (cmd *Command) persist() bool {
+	if len(cmd.args) != 2 {
+		cmd.conn.Write([]uint8("-ERR wrong number of argumenrs for '" + cmd.args[0] + "'command\r\n"))
+		return true
+	}
+	key := cmd.args[1]
+
+	if _, ok := cache.Load(key); ok {
+		cmd.conn.Write([]uint8(":0\r\n"))
+	}
+
+	if _, ok := expirations.Load(key); ok {
+		expirations.Delete(key)
+		cmd.conn.Write([]uint8(":1\r\n")) // Expiration removed
+	} else {
+		cmd.conn.Write([]uint8(":0\r\n")) // Key did not have an expiration
+	}
+
 	return true
 }
